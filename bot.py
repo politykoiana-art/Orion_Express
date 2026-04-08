@@ -11,10 +11,12 @@ logger = logging.getLogger(__name__)
 
 # --- Конфигурация ---
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-TARGET_CHAT_ID = os.environ.get("TARGET_CHAT_ID")  # ID чата, куда будут поститься задания
+TARGET_CHAT_ID = os.environ.get("TARGET_CHAT_ID")  # ID чата
+# !!! НОВОЕ: ID темы (топика) в этом чате !!!
+MESSAGE_THREAD_ID = int(os.environ.get("MESSAGE_THREAD_ID", "0"))
 
-if not BOT_TOKEN or not TARGET_CHAT_ID:
-    raise ValueError("Необходимо указать BOT_TOKEN и TARGET_CHAT_ID в переменных окружения!")
+if not BOT_TOKEN or not TARGET_CHAT_ID or not MESSAGE_THREAD_ID:
+    raise ValueError("Необходимо указать BOT_TOKEN, TARGET_CHAT_ID и MESSAGE_THREAD_ID в переменных окружения!")
 
 # --- Команды бота ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -55,17 +57,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         f"<b>Актив:</b> {activity}"
     )
     
-    # Отправляем сообщение в целевой чат
+    # Отправляем сообщение в целевой чат и тему
     try:
         await context.bot.send_message(
             chat_id=TARGET_CHAT_ID,
             text=message_to_send,
+            message_thread_id=MESSAGE_THREAD_ID,  # <-- ВОТ ГЛАВНОЕ ИЗМЕНЕНИЕ
             parse_mode='HTML',
             disable_web_page_preview=True
         )
         await update.message.reply_text("✅ Задание успешно опубликовано!")
     except Exception as e:
-        logger.error(f"Ошибка при отправке сообщения в чат {TARGET_CHAT_ID}: {e}")
+        logger.error(f"Ошибка при отправке сообщения в чат {TARGET_CHAT_ID}, тема {MESSAGE_THREAD_ID}: {e}")
         await update.message.reply_text("❌ Произошла ошибка при публикации задания. Попробуйте позже.")
 
 def main() -> None:
