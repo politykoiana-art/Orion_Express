@@ -1,5 +1,18 @@
 import os
 import logging
+# В начало файла после импортов
+import sys
+import logging
+
+class TokenFilter(logging.Filter):
+    def filter(self, record):
+        if hasattr(record, 'msg') and isinstance(record.msg, str):
+            record.msg = record.msg.replace(BOT_TOKEN, "[TOKEN_HIDDEN]")
+        return True
+
+# Применить фильтр ко всем логгерам
+for handler in logging.root.handlers:
+    handler.addFilter(TokenFilter())
 from html import escape
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
