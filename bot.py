@@ -1,23 +1,10 @@
 import os
 import logging
-# В начало файла после импортов
-import sys
-import logging
-
-class TokenFilter(logging.Filter):
-    def filter(self, record):
-        if hasattr(record, 'msg') and isinstance(record.msg, str):
-            record.msg = record.msg.replace(BOT_TOKEN, "[TOKEN_HIDDEN]")
-        return True
-
-# Применить фильтр ко всем логгерам
-for handler in logging.root.handlers:
-    handler.addFilter(TokenFilter())
 from html import escape
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# --- Логирование ---
+# --- Настройка логирования ---
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
@@ -35,52 +22,79 @@ if not TARGET_CHAT_ID:
 if not TARGET_THREAD_ID:
     raise ValueError("❌ Не указан TARGET_THREAD_ID в переменных окружения!")
 
+# --- Фильтр для скрытия токена в логах (опционально) ---
+class TokenFilter(logging.Filter):
+    def filter(self, record):
+        if BOT_TOKEN and hasattr(record, 'msg') and isinstance(record.msg, str):
+            record.msg = record.msg.replace(BOT_TOKEN, "[TOKEN_HIDDEN]")
+        return True
+
+for handler in logging.root.handlers:
+    handler.addFilter(TokenFilter())
+
 # --- Команда /start ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Отвечаем только в личных сообщениях
     if update.effective_chat.type != "private":
         return
     await update.message.reply_text(
         "👋 Привет! Я бот для публикации заданий.\n\n"
         "Отправь мне задание в формате:\n"
         "Социальная сеть\n"
-        "Ссылка\n"
+        "Ссылка (одна или несколько)\n"
         "Перечень актива\n\n"
-        "Пример:\n"
+        "Пример с одной ссылкой:\n"
         "Instagram\n"
         "https://instagram.com/example\n"
-        "Лайк, Комментарий"
+        "Лайк, Комментарий\n\n"
+        "Пример с двумя ссылками:\n"
+        "Telegram\n"
+        "https://t.me/username\n"
+        "https://t.me/channel\n"
+        "Лайк, Репост"
     )
 
 # --- Обработка сообщений ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Игнорируем сообщения из групп и каналов
     if update.effective_chat.type != "private":
         return
 
-    text = update.message.text
-    lines = text.strip().split('\n')
+    text = update.message.text.strip()
+    lines = text.split('\n')
 
     if len(lines) < 3:
         await update.message.reply_text(
-            "⚠️ Неверный формат. Используй:\n\n"
-            "Социальная сеть\n"
-            "Ссылка\n"
-            "Перечень актива"
+            "⚠️ Неверный формат. Должно быть минимум 3 строки:\n"
+            "1. Соцсеть\n"
+            "2. Ссылка (минимум одна)\n"
+            "3. Активности"
         )
         return
 
+    # Первая строка — соцсеть
     social_network = lines[0].strip()
-    link = lines[1].strip()
-    activity = lines[2].strip()
+    # Последняя строка — активности
+    activity = lines[-1].strip()
+    # Всё между первой и последней — ссылки (может быть одна или несколько)
+    links = [line.strip() for line in lines[1:-1] if line.strip()]
 
+    if not links:
+        await update.message.reply_text("⚠️ Не указана ни одна ссылка.")
+        return
+
+    # Экранирование HTML
     safe_social = escape(social_network)
-    safe_link = escape(link)
     safe_activity = escape(activity)
+    safe_links = [escape(link) for link in links]
+
+    # Формируем сообщение
+    if len(safe_links) == 1:
+        links_text = f"<b>Ссылка:</b> {safe_links[0]}"
+    else:
+        links_text = "<b>Ссылки:</b>\n" + "\n".join(f"• {link}" for link in safe_links)
 
     message_to_send = (
         f"#{safe_social}\n"
-        f"<b>Ссылка:</b> {safe_link}\n"
+        f"{links_text}\n"
         f"<b>Актив:</b> {safe_activity}"
     )
 
