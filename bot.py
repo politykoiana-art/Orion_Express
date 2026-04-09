@@ -4,13 +4,13 @@ from html import escape
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# --- Настройка логирования ---
+# --- Логирование ---
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# --- Обязательные переменные окружения ---
+# --- Переменные окружения ---
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 TARGET_CHAT_ID = os.environ.get("TARGET_CHAT_ID")
 TARGET_THREAD_ID = os.environ.get("TARGET_THREAD_ID")
@@ -24,6 +24,9 @@ if not TARGET_THREAD_ID:
 
 # --- Команда /start ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Отвечаем только в личных сообщениях
+    if update.effective_chat.type != "private":
+        return
     await update.message.reply_text(
         "👋 Привет! Я бот для публикации заданий.\n\n"
         "Отправь мне задание в формате:\n"
@@ -36,8 +39,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "Лайк, Комментарий"
     )
 
-# --- Обработка входящих сообщений ---
+# --- Обработка сообщений ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Игнорируем сообщения из групп и каналов
+    if update.effective_chat.type != "private":
+        return
+
     text = update.message.text
     lines = text.strip().split('\n')
 
@@ -54,7 +61,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     link = lines[1].strip()
     activity = lines[2].strip()
 
-    # Экранируем спецсимволы для HTML
     safe_social = escape(social_network)
     safe_link = escape(link)
     safe_activity = escape(activity)
@@ -78,14 +84,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         logger.error(f"Ошибка при отправке: {e}")
         await update.message.reply_text(f"❌ Ошибка публикации: {e}")
 
-# --- Запуск бота ---
+# --- Запуск ---
 def main() -> None:
     application = Application.builder().token(BOT_TOKEN).build()
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    logger.info("Бот запущен и готов к работе...")
+    logger.info("Бот запущен и готов к работе (только ЛС)...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
